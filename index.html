@@ -422,6 +422,89 @@ function updateDevPanel() {
   });
 }
 
+// ── Sound Engine ─────────────────────────────────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) audioCtx = new AudioCtx();
+  // iOSはユーザー操作後にresumeが必要
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// 短いビープ音の汎用関数
+function playTone({ freq = 440, type = 'sine', gain = 0.3, duration = 0.1, attack = 0.005, decay = 0.08 }) {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime);
+    gainNode.gain.setValueAtTime(0, ctx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(gain, ctx.currentTime + attack);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration + 0.05);
+  } catch(e) {}
+}
+
+// ミラー設置：コツッ
+function soundMirrorPlace() {
+  playTone({ freq: 600, type: 'triangle', gain: 0.25, duration: 0.08 });
+}
+
+// ミラー削除：低めのコツッ
+function soundMirrorRemove() {
+  playTone({ freq: 300, type: 'triangle', gain: 0.2, duration: 0.07 });
+}
+
+// GO!発射：ビューン
+function soundLaser() {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.3);
+    gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.35);
+  } catch(e) {}
+}
+
+// ゴール通過：チーン
+function soundGoalHit() {
+  playTone({ freq: 1200, type: 'sine', gain: 0.3, duration: 0.25, attack: 0.01 });
+}
+
+// クリア：上昇する和音
+function soundClear() {
+  try {
+    const ctx = getAudioCtx();
+    [523, 659, 784, 1047].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      osc.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      const start = ctx.currentTime + i * 0.1;
+      gainNode.gain.setValueAtTime(0, start);
+      gainNode.gain.linearRampToValueAtTime(0.25, start + 0.02);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
+      osc.start(start);
+      osc.stop(start + 0.45);
+    });
+  } catch(e) {}
+}
+
 // ── Resize ───────────────────────────────────────────────────
 function resize() {
   const size = document.getElementById('grid-container').offsetWidth;
@@ -458,6 +541,8 @@ function tap(x, y) {
 
   const cur = grid[row][col];
   grid[row][col] = cur===null ? '/' : cur==='/' ? '\\' : null;
+  if (grid[row][col] === null) soundMirrorRemove();
+  else soundMirrorPlace();
 
   laserOn = false;
   clearLaser();
@@ -780,19 +865,25 @@ let lastWarpsUsed = 0;
 
 function fireGo() {
   laserOn = true;
+  soundLaser();
   const res = traceLaser();
   laserSegments = res.segments;
   lastGoalOrder = res.goalOrder;
   lastWarpsUsed = res.warpsUsedCount;
 
-  // goalsHit = which indices appear in goalOrder (for drawing hit state)
   goalsHit = new Set(lastGoalOrder);
+
+  // ゴール通過音
+  lastGoalOrder.forEach((_, i) => {
+    setTimeout(() => soundGoalHit(), 180 + i * 130);
+  });
 
   drawLaser();
   drawGrid();
 
   if (isClear()) {
-    setTimeout(showClear, 400);
+    setTimeout(soundClear, 200);
+    setTimeout(showClear, 600);
     return;
   }
 
