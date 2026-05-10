@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>反射ゲーム</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Noto+Sans+JP:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0a0a14;
+    --panel: #12121f;
+    --border: #1e1e35;
+    --laser: #00ffcc;
+    --laser-glow: rgba(0,255,204,0.4);
+    --goal-color: #ff4488;
+    --accent: #7c4dff;
+    --text: #e0e0ff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans JP', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 12px 8px 24px;
+    overflow-x: hidden;
+  }
+
+  header {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .title {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.3rem;
+    font-weight: 900;
+    color: var(--laser);
+    text-shadow: 0 0 16px var(--laser-glow), 0 0 32px var(--laser-glow);
+  }
+
+  .stage-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 0.85rem;
+    color: var(--accent);
+    background: rgba(124,77,255,0.12);
+    border: 1px solid var(--accent);
+    border-radius: 20px;
+    padding: 4px 14px;
+  }
+
+  .game-wrap {
+    width: 100%;
+    max-width: 420px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 12px;
+    box-shadow: 0 0 40px rgba(0,255,204,0.06), 0 8px 32px rgba(0,0,0,0.5);
+  }
+
+  #grid-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    margin-bottom: 10px;
+  }
+
+  canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    border-radius: 8px;
+  }
+
+  #grid-canvas  { z-index: 1; }
+  #laser-canvas { z-index: 2; pointer-events: none; }
+  #interact-canvas { z-index: 3; }
+
+  .bottom-panel { display: flex; gap: 8px; }
+
+  .go-btn {
+    flex: 1;
+    background: linear-gradient(135deg, #00ffcc, #00b894);
+    color: #0a0a14;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Orbitron', monospace;
+    font-size: 1.2rem;
+    font-weight: 900;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    box-shadow: 0 0 20px rgba(0,255,204,0.3);
+    transition: all 0.15s;
+    min-height: 56px;
+  }
+  .go-btn:active { transform: scale(0.96); }
+
+  .reset-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: #888;
+    border-radius: 10px;
+    padding: 0 18px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    font-family: 'Noto Sans JP', sans-serif;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .reset-btn:active { background: var(--border); color: #ccc; }
+
+  #message {
+    height: 20px;
+    font-size: 0.72rem;
+    color: var(--goal-color);
+    text-align: center;
+    margin-bottom: 6px;
+  }
+
+  #gimmick-badge {
+    display: block;
+    font-size: 0.62rem;
+    color: #aaa;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid #2a2a40;
+    border-radius: 20px;
+    padding: 2px 10px;
+    margin: 0 auto 6px;
+    text-align: center;
+    width: 100%;
+  }
+
+  .hint {
+    font-size: 0.68rem;
+    color: #444;
+    text-align: center;
+    margin-top: 7px;
+  }
+
+  /* ── Overlay ── */
+  #overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #overlay.show { display: flex; }
+
+  .overlay-box {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 36px 28px;
+    text-align: center;
+    max-width: 300px;
+    width: 90%;
+  }
+  .overlay-emoji { font-size: 3.5rem; margin-bottom: 10px; }
+  .overlay-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 1.5rem;
+    font-weight: 900;
+    margin-bottom: 6px;
+    color: var(--laser);
+    text-shadow: 0 0 16px var(--laser-glow);
+  }
+  .overlay-sub { color: #888; font-size: 0.85rem; margin-bottom: 24px; }
+  .overlay-btn {
+    background: linear-gradient(135deg, #00ffcc, #00b894);
+    color: #0a0a14;
+    border: none;
+    border-radius: 10px;
+    padding: 13px 32px;
+    font-family: 'Orbitron', monospace;
+    font-size: 0.95rem;
+    font-weight: 900;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  /* ── DEV: Stage select ── */
+  #dev-panel {
+    width: 100%;
+    max-width: 420px;
+    margin-top: 14px;
+    background: rgba(255,200,0,0.03);
+    border: 1px dashed #443300;
+    border-radius: 12px;
+    padding: 10px 10px 8px;
+  }
+  .dev-label {
+    font-size: 0.6rem;
+    color: #775500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .dev-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 5px;
+  }
+  .dev-btn {
+    background: #130f00;
+    border: 1px solid #332200;
+    color: #886600;
+    border-radius: 6px;
+    padding: 7px 0;
+    font-family: 'Orbitron', monospace;
+    font-size: 0.7rem;
+    cursor: pointer;
+    transition: all 0.12s;
+    text-align: center;
+    line-height: 1;
+  }
+  .dev-btn:active { background: #221800; }
+  .dev-btn.active {
+    background: #221800;
+    border-color: #ffcc00;
+    color: #ffcc00;
+    box-shadow: 0 0 8px rgba(255,200,0,0.25);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title">⚡ REFLECT</div>
+  <div class="stage-label" id="stage-label">STAGE 1</div>
+</header>
+
+<div class="game-wrap">
+  <div id="gimmick-badge">ミラーのみ ★☆☆</div>
+  <div id="message"></div>
+  <div id="grid-container">
+    <canvas id="grid-canvas"></canvas>
+    <canvas id="laser-canvas"></canvas>
+    <canvas id="interact-canvas"></canvas>
+  </div>
+  <div class="bottom-panel">
+    <button class="go-btn" onclick="fireGo()">GO!</button>
+    <button class="reset-btn" onclick="resetStage()">リセット</button>
+  </div>
+  <div class="hint">マスをタップ → なし ／ ＼ の順に切り替わります</div>
+</div>
+
+<!-- ★ DEV ONLY: 完成時はこのブロックを丸ごと削除 -->
+<div id="dev-panel">
+  <div class="dev-label">🛠 DEV — ステージセレクト</div>
+  <div class="dev-grid" id="dev-grid"></div>
+</div>
+<!-- /DEV -->
+
+<div id="overlay">
+  <div class="overlay-box">
+    <div class="overlay-emoji" id="overlay-emoji">🎉</div>
+    <div class="overlay-title" id="overlay-title">CLEAR!</div>
+    <div class="overlay-sub" id="overlay-sub">素晴らしい！</div>
+    <button class="overlay-btn" onclick="nextStage()" id="overlay-btn">次のステージ →</button>
+  </div>
+</div>
+
+<script>
+const COLS = 6, ROWS = 6;
+
+const STAGES = [
+  // ── LV1: ミラーのみ（変更なし）
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 0, row: 5, dir: 'right' },
+    goals: [{ col: 5, row: 0 }],
+    walls: [], warps: [],
+  },
+  // ── LV2: 画像通り — Start col0,row4右向き / Goal col2,row1 / 壁 col0-2,row3
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 0, row: 4, dir: 'right' },
+    goals: [{ col: 2, row: 1 }],
+    walls: [{ col: 0, row: 3 }, { col: 1, row: 3 }, { col: 2, row: 3 }],
+    warps: [],
+  },
+  // ── LV3: ミラーのみ（変更なし）
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 1, row: 5, dir: 'up' },
+    goals: [{ col: 5, row: 1 }],
+    walls: [{ col: 1, row: 2 }, { col: 4, row: 3 }], warps: [],
+  },
+  // ── LV4: 複数ゴール（変更なし）
+  {
+    gimmick: '複数ゴール ★★☆',
+    start: { col: 0, row: 5, dir: 'right' },
+    goals: [{ col: 3, row: 2 }, { col: 5, row: 0 }],
+    walls: [], warps: [],
+  },
+  // ── LV5: 旧LV6を繰り上げ — Start col0,row5上向き / Goals ②col0,row3 ①col4,row2 ③col5,row5
+  //         壁 col4,row1 / col3,row4
+  {
+    gimmick: '複数ゴール ★★☆',
+    start: { col: 0, row: 5, dir: 'up' },
+    goals: [{ col: 0, row: 2 }, { col: 3, row: 2 }, { col: 5, row: 5 }],
+    walls: [{ col: 4, row: 1 }, { col: 3, row: 4 }], warps: [],
+  },
+  // ── LV6: 画像STAGE6 — Start col0,row5上向き / ①col3,row2 ②col0,row3 ③col5,row5
+  //         壁 col4,row1 / col3,row4（※スケッチ読み直し：ゴール順①②③に合わせて配置）
+  {
+    gimmick: '複数ゴール ★★☆',
+    start: { col: 0, row: 5, dir: 'up' },
+    goals: [{ col: 3, row: 2 }, { col: 0, row: 2 }, { col: 5, row: 5 }],
+    walls: [{ col: 4, row: 1 }, { col: 3, row: 4 }], warps: [],
+  },
+  // ── LV7: 旧LV8
+  {
+    gimmick: 'ワープゾーン ★★☆',
+    start: { col: 2, row: 0, dir: 'down' },
+    goals: [{ col: 5, row: 4 }],
+    walls: [{ col: 2, row: 3 }, { col: 1, row: 4 }],
+    warps: [{ col: 2, row: 2 }, { col: 5, row: 2 }],
+  },
+  // ── LV8: 旧LV7
+  {
+    gimmick: 'ワープゾーン ★★☆',
+    start: { col: 0, row: 1, dir: 'right' },
+    goals: [{ col: 5, row: 1 }],
+    walls: [{ col: 4, row: 2 }],
+    warps: [{ col: 3, row: 2 }, { col: 3, row: 4 }],
+  },
+  // ── LV9: 画像STAGE9 — Start col0,row1右向き / Goal col5,row5
+  //         壁 col3,row2 / col4,row2
+  //         W1: col1,row4 ↔ col3,row1
+  //         W2: col4,row0 ↔ col4,row3
+  {
+    gimmick: 'ワープゾーン ★★★',
+    start: { col: 0, row: 1, dir: 'right' },
+    goals: [{ col: 5, row: 5 }],
+    walls: [{ col: 3, row: 2 }, { col: 4, row: 2 }],
+    warps: [
+      { col: 3, row: 1 }, { col: 1, row: 4 },   // W1ペア
+      { col: 4, row: 0 }, { col: 4, row: 3 },   // W2ペア
+    ],
+  },
+  // ── LV10-12: 複合（変更なし）
+  {
+    gimmick: '複数ゴール＋ワープ ★★★',
+    start: { col: 0, row: 5, dir: 'right' },
+    goals: [{ col: 3, row: 5 }, { col: 5, row: 0 }],
+    walls: [{ col: 2, row: 3 }],
+    warps: [{ col: 3, row: 3 }, { col: 3, row: 0 }],
+  },
+  {
+    gimmick: '複数ゴール＋ワープ ★★★',
+    start: { col: 0, row: 0, dir: 'down' },
+    goals: [{ col: 0, row: 3 }, { col: 4, row: 3 }, { col: 4, row: 0 }],
+    walls: [{ col: 1, row: 1 }, { col: 2, row: 4 }],
+    warps: [{ col: 0, row: 5 }, { col: 4, row: 5 }],
+  },
+  {
+    gimmick: '複数ゴール＋ワープ ★★★',
+    start: { col: 0, row: 2, dir: 'right' },
+    goals: [{ col: 0, row: 4 }, { col: 4, row: 1 }, { col: 1, row: 4 }],
+    walls: [],
+    warps: [{ col: 2, row: 0 }, { col: 3, row: 4 }, { col: 2, row: 3 }, { col: 4, row: 3 }],
+  },
+];
+
+function getWarpPartner(stage, col, row) {
+  const w = stage.warps;
+  for (let i = 0; i < w.length; i += 2) {
+    if (w[i].col===col && w[i].row===row)     return w[i+1];
+    if (w[i+1] && w[i+1].col===col && w[i+1].row===row) return w[i];
+  }
+  return null;
+}
+
+// ── State ────────────────────────────────────────────────────
+let currentStage = 0;
+let grid = [];
+let laserOn = false;
+let laserSegments = [];
+let goalsHit = new Set();
+let CELL_SIZE;
+
+const gridCanvas     = document.getElementById('grid-canvas');
+const laserCanvas    = document.getElementById('laser-canvas');
+const interactCanvas = document.getElementById('interact-canvas');
+const gctx = gridCanvas.getContext('2d');
+const lctx = laserCanvas.getContext('2d');
+
+// ── DEV: Build stage select buttons ──────────────────────────
+function buildDevPanel() {
+  const container = document.getElementById('dev-grid');
+  if (!container) return;
+  container.innerHTML = '';
+  STAGES.forEach((_, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'dev-btn' + (i === currentStage ? ' active' : '');
+    btn.textContent = i + 1;
+    btn.onclick = () => initStage(i);
+    container.appendChild(btn);
+  });
+}
+
+function updateDevPanel() {
+  document.querySelectorAll('.dev-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', i === currentStage);
+  });
+}
+
+// ── Resize ───────────────────────────────────────────────────
+function resize() {
+  const size = document.getElementById('grid-container').offsetWidth;
+  gridCanvas.width = laserCanvas.width = interactCanvas.width = size;
+  gridCanvas.height = laserCanvas.height = interactCanvas.height = size;
+  CELL_SIZE = size / COLS;
+  drawGrid();
+  if (laserOn) drawLaser();
+}
+window.addEventListener('resize', resize);
+
+// ── Input ────────────────────────────────────────────────────
+interactCanvas.addEventListener('click', e => {
+  const r = interactCanvas.getBoundingClientRect();
+  tap(e.clientX - r.left, e.clientY - r.top);
+});
+interactCanvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  const r = interactCanvas.getBoundingClientRect();
+  tap(t.clientX - r.left, t.clientY - r.top);
+}, { passive: false });
+
+function tap(x, y) {
+  const col = Math.floor(x / CELL_SIZE);
+  const row = Math.floor(y / CELL_SIZE);
+  if (col < 0 || col >= COLS || row < 0 || row >= ROWS) return;
+
+  const stage = STAGES[currentStage];
+  if (stage.walls.some(w => w.col===col && w.row===row)) return;
+  if (stage.start.col===col && stage.start.row===row) return;
+  if (stage.goals.some(g => g.col===col && g.row===row)) return;
+  if (stage.warps.some(w => w.col===col && w.row===row)) return;
+
+  const cur = grid[row][col];
+  grid[row][col] = cur===null ? '/' : cur==='/' ? '\\' : null;
+
+  laserOn = false;
+  clearLaser();
+  setMessage('');
+  drawGrid();
+}
+
+// ── Draw ─────────────────────────────────────────────────────
+function drawGrid() {
+  const stage = STAGES[currentStage];
+  const size = gridCanvas.width;
+  const cs = CELL_SIZE;
+
+  gctx.clearRect(0, 0, size, size);
+  gctx.fillStyle = '#0d0d1a';
+  gctx.beginPath();
+  gctx.roundRect(0, 0, size, size, 8);
+  gctx.fill();
+
+  // Grid lines
+  gctx.strokeStyle = '#1e1e35';
+  gctx.lineWidth = 1;
+  for (let r = 0; r <= ROWS; r++) {
+    gctx.beginPath(); gctx.moveTo(0, r*cs); gctx.lineTo(size, r*cs); gctx.stroke();
+  }
+  for (let c = 0; c <= COLS; c++) {
+    gctx.beginPath(); gctx.moveTo(c*cs, 0); gctx.lineTo(c*cs, size); gctx.stroke();
+  }
+
+  // Walls
+  stage.walls.forEach(({ col, row }) => {
+    const wx = col*cs, wy = row*cs;
+    gctx.fillStyle = '#2a1f4a';
+    gctx.fillRect(wx+1, wy+1, cs-2, cs-2);
+    gctx.save();
+    gctx.beginPath();
+    gctx.rect(wx+1, wy+1, cs-2, cs-2);
+    gctx.clip();
+    gctx.strokeStyle = '#3d2e6a';
+    gctx.lineWidth = 1.5;
+    for (let i = -cs; i < cs*2; i += 10) {
+      gctx.beginPath();
+      gctx.moveTo(wx+i, wy); gctx.lineTo(wx+i+cs, wy+cs);
+      gctx.stroke();
+    }
+    gctx.restore();
+    gctx.strokeStyle = '#6a4fcf';
+    gctx.lineWidth = 1.5;
+    gctx.strokeRect(wx+1.5, wy+1.5, cs-3, cs-3);
+    gctx.save();
+    gctx.fillStyle = 'rgba(106,79,207,0.6)';
+    gctx.font = `bold ${Math.round(cs*0.32)}px sans-serif`;
+    gctx.textAlign = 'center';
+    gctx.textBaseline = 'middle';
+    gctx.fillText('✕', wx+cs/2, wy+cs/2);
+    gctx.restore();
+  });
+
+  // Warp pairs
+  const warpColors = ['#ff9900', '#cc44ff'];
+  const w = stage.warps;
+  for (let i = 0; i < w.length; i += 2) {
+    const color = warpColors[(i/2) % warpColors.length];
+    drawWarpCell(w[i].col, w[i].row, color, 'A');
+    if (w[i+1]) drawWarpCell(w[i+1].col, w[i+1].row, color, 'B');
+  }
+
+  // Mirrors
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (grid[r][c]) drawMirror(c, r, grid[r][c]);
+
+  // Goals
+  stage.goals.forEach((g, i) => drawGoal(g.col, g.row, i));
+
+  // Start
+  drawStart(stage.start.col, stage.start.row, stage.start.dir);
+}
+
+function drawWarpCell(col, row, color, label) {
+  const cs = CELL_SIZE;
+  const wx = col*cs, wy = row*cs;
+  const rgb = hexToRgb(color);
+  gctx.fillStyle = `rgba(${rgb},0.1)`;
+  gctx.fillRect(wx+1, wy+1, cs-2, cs-2);
+  gctx.save();
+  gctx.strokeStyle = color;
+  gctx.lineWidth = 2;
+  gctx.shadowColor = color;
+  gctx.shadowBlur = 10;
+  gctx.strokeRect(wx+2, wy+2, cs-4, cs-4);
+  gctx.restore();
+  gctx.save();
+  gctx.fillStyle = color;
+  gctx.globalAlpha = 0.85;
+  gctx.font = `bold ${Math.round(cs*0.38)}px 'Orbitron', monospace`;
+  gctx.textAlign = 'center';
+  gctx.textBaseline = 'middle';
+  gctx.fillText('W', wx+cs/2, wy+cs/2);
+  gctx.restore();
+}
+
+function hexToRgb(hex) {
+  return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;
+}
+
+function drawMirror(col, row, type) {
+  const cs = CELL_SIZE;
+  const x = col*cs, y = row*cs, pad = cs*0.18;
+  gctx.save();
+  gctx.strokeStyle = '#f0c040';
+  gctx.lineWidth = Math.max(2.5, cs * 0.075);
+  gctx.shadowColor = 'rgba(240,192,64,0.8)';
+  gctx.shadowBlur = 12;
+  gctx.lineCap = 'round';
+  gctx.beginPath();
+  if (type === '/') {
+    gctx.moveTo(x+cs-pad, y+pad); gctx.lineTo(x+pad, y+cs-pad);
+  } else {
+    gctx.moveTo(x+pad, y+pad); gctx.lineTo(x+cs-pad, y+cs-pad);
+  }
+  gctx.stroke();
+  gctx.restore();
+}
+
+function drawStart(col, row, dir) {
+  const cs = CELL_SIZE;
+  const cx = col*cs+cs/2, cy = row*cs+cs/2;
+  const color = '#00ffcc';
+
+  gctx.save();
+  gctx.fillStyle = color;
+  gctx.shadowColor = color;
+  gctx.shadowBlur = 22;
+  gctx.beginPath();
+  gctx.arc(cx, cy, cs*0.22, 0, Math.PI*2);
+  gctx.fill();
+  gctx.restore();
+
+  let dx = 0, dy = 0;
+  if (dir==='right') dx=1; else if (dir==='left') dx=-1;
+  else if (dir==='up') dy=-1; else dy=1;
+
+  const ax1 = cx + dx*(cs*0.25), ay1 = cy + dy*(cs*0.25);
+  const ax2 = cx + dx*(cs*0.57), ay2 = cy + dy*(cs*0.57);
+  const headSize = cs * 0.13;
+
+  gctx.save();
+  gctx.strokeStyle = color; gctx.fillStyle = color;
+  gctx.lineWidth = Math.max(2, cs*0.055);
+  gctx.shadowColor = color; gctx.shadowBlur = 14;
+  gctx.lineCap = 'round';
+  gctx.beginPath(); gctx.moveTo(ax1, ay1); gctx.lineTo(ax2, ay2); gctx.stroke();
+  const angle = Math.atan2(dy, dx);
+  gctx.beginPath();
+  gctx.moveTo(ax2, ay2);
+  gctx.lineTo(ax2 - headSize*Math.cos(angle-Math.PI/6), ay2 - headSize*Math.sin(angle-Math.PI/6));
+  gctx.lineTo(ax2 - headSize*Math.cos(angle+Math.PI/6), ay2 - headSize*Math.sin(angle+Math.PI/6));
+  gctx.closePath(); gctx.fill();
+  gctx.restore();
+}
+
+function drawGoal(col, row, idx) {
+  const cs = CELL_SIZE;
+  const cx = col*cs+cs/2, cy = row*cs+cs/2;
+  const isHit = goalsHit.has(idx);
+  const color = isHit ? '#00ffcc' : '#ff4488';
+
+  gctx.save();
+  gctx.strokeStyle = color;
+  gctx.lineWidth = Math.max(2.5, cs*0.065);
+  gctx.shadowColor = color; gctx.shadowBlur = 24;
+  gctx.beginPath();
+  gctx.arc(cx, cy, cs*0.26, 0, Math.PI*2);
+  gctx.stroke();
+  gctx.fillStyle = isHit ? 'rgba(0,255,204,0.18)' : 'rgba(255,68,136,0.12)';
+  gctx.fill();
+  gctx.restore();
+
+  if (STAGES[currentStage].goals.length > 1) {
+    gctx.save();
+    gctx.fillStyle = color;
+    gctx.font = `bold ${Math.round(cs*0.26)}px 'Orbitron', monospace`;
+    gctx.textAlign = 'center'; gctx.textBaseline = 'middle';
+    gctx.fillText(idx+1, cx, cy);
+    gctx.restore();
+  }
+}
+
+// ── Laser ─────────────────────────────────────────────────────
+// Returns:
+//   segments   : array of point-arrays for drawing
+//   goalOrder  : array of goal indices in the order they were hit
+//   warpsUsedCount : number of distinct warp portals entered
+function traceLaser() {
+  const stage = STAGES[currentStage];
+  const cs = CELL_SIZE;
+  const segments = [];
+  const goalOrder = [];          // ordered list of goal indices as hit
+  let warpsUsedCount = 0;        // how many warp entries occurred
+
+  const queue = [{
+    col: stage.start.col, row: stage.start.row, dir: stage.start.dir,
+    path: [{ x: stage.start.col*cs+cs/2, y: stage.start.row*cs+cs/2 }],
+    warpsUsed: new Set(),
+  }];
+
+  while (queue.length > 0) {
+    const beam = queue.shift();
+    let { col, row, dir, path, warpsUsed } = beam;
+
+    for (let step = 0; step < 300; step++) {
+      let nc = col, nr = row;
+      if (dir==='right') nc++; else if (dir==='left') nc--;
+      else if (dir==='up') nr--; else nr++;
+
+      // Out of bounds
+      if (nc<0||nc>=COLS||nr<0||nr>=ROWS) {
+        let ex=path[path.length-1].x, ey=path[path.length-1].y;
+        if (dir==='right') ex=(col+1)*cs; else if (dir==='left') ex=col*cs;
+        else if (dir==='up') ey=row*cs; else ey=(row+1)*cs;
+        path.push({x:ex,y:ey}); break;
+      }
+
+      // Wall
+      if (stage.walls.some(w=>w.col===nc&&w.row===nr)) {
+        let ex=nc*cs+cs/2, ey=nr*cs+cs/2;
+        if (dir==='right') ex=nc*cs; else if (dir==='left') ex=(nc+1)*cs;
+        else if (dir==='up') ey=(nr+1)*cs; else ey=nr*cs;
+        path.push({x:ex,y:ey}); break;
+      }
+
+      col=nc; row=nr;
+
+      // Check goal — record in order, skip duplicates
+      stage.goals.forEach((g, gi) => {
+        if (g.col===col && g.row===row && !goalOrder.includes(gi)) {
+          goalOrder.push(gi);
+        }
+      });
+
+      // Warp
+      const warpKey = `${col},${row}`;
+      const partner = getWarpPartner(stage, col, row);
+      if (partner && !warpsUsed.has(warpKey)) {
+        path.push({x:col*cs+cs/2, y:row*cs+cs/2});
+        segments.push([...path]);
+        warpsUsedCount++;
+        const nw = new Set(warpsUsed);
+        nw.add(warpKey); nw.add(`${partner.col},${partner.row}`);
+        queue.push({
+          col: partner.col, row: partner.row, dir,
+          path: [{x:partner.col*cs+cs/2, y:partner.row*cs+cs/2}],
+          warpsUsed: nw,
+        });
+        path = null; break;
+      }
+
+      // Mirror
+      const m = grid[row][col];
+      if (m) {
+        path.push({x:col*cs+cs/2, y:row*cs+cs/2});
+        if (m==='/') {
+          if (dir==='right') dir='up'; else if (dir==='left') dir='down';
+          else if (dir==='up') dir='right'; else dir='left';
+        } else {
+          if (dir==='right') dir='down'; else if (dir==='left') dir='up';
+          else if (dir==='up') dir='left'; else dir='right';
+        }
+      }
+    }
+    if (path && path.length > 0) segments.push(path);
+  }
+
+  return { segments, goalOrder, warpsUsedCount };
+}
+
+function drawLaser() {
+  lctx.clearRect(0,0,laserCanvas.width,laserCanvas.height);
+  if (!laserOn) return;
+  const allClear = isClear();
+  const color = allClear ? '#00ffcc' : '#ff6644';
+
+  laserSegments.forEach(path => {
+    if (path.length < 2) return;
+    lctx.save();
+    lctx.strokeStyle = color; lctx.lineWidth = 3;
+    lctx.shadowColor = color; lctx.shadowBlur = 18;
+    lctx.lineCap = 'round'; lctx.lineJoin = 'round';
+    lctx.beginPath();
+    lctx.moveTo(path[0].x, path[0].y);
+    for (let i=1; i<path.length; i++) lctx.lineTo(path[i].x, path[i].y);
+    lctx.stroke();
+    lctx.restore();
+  });
+}
+
+function clearLaser() {
+  lctx.clearRect(0,0,laserCanvas.width,laserCanvas.height);
+}
+
+// Check all clear conditions
+function isClear() {
+  const stage = STAGES[currentStage];
+
+  // 1) All goals hit in order 0,1,2,...
+  const expectedOrder = stage.goals.map((_,i)=>i);
+  if (JSON.stringify(lastGoalOrder) !== JSON.stringify(expectedOrder)) return false;
+
+  // 2) If stage has warps, laser must have used at least one warp pair
+  const requiredWarps = stage.warps.length / 2;
+  if (requiredWarps > 0 && lastWarpsUsed < requiredWarps) return false;
+
+  return true;
+}
+
+// ── Actions ───────────────────────────────────────────────────
+let lastGoalOrder = [];
+let lastWarpsUsed = 0;
+
+function fireGo() {
+  laserOn = true;
+  const res = traceLaser();
+  laserSegments = res.segments;
+  lastGoalOrder = res.goalOrder;
+  lastWarpsUsed = res.warpsUsedCount;
+
+  // goalsHit = which indices appear in goalOrder (for drawing hit state)
+  goalsHit = new Set(lastGoalOrder);
+
+  drawLaser();
+  drawGrid();
+
+  if (isClear()) {
+    setTimeout(showClear, 400);
+    return;
+  }
+
+  // Build helpful error message
+  const stage = STAGES[currentStage];
+  const totalGoals = stage.goals.length;
+  const requiredWarps = stage.warps.length / 2;
+
+  if (requiredWarps > 0 && lastWarpsUsed < requiredWarps) {
+    setMessage('ワープゾーンを必ず通過させよう！');
+  } else if (lastGoalOrder.length === 0) {
+    setMessage('もう少し！ミラーを調整してみて');
+  } else if (lastGoalOrder.length < totalGoals) {
+    setMessage(`あと${totalGoals - lastGoalOrder.length}つのゴールに当てよう！`);
+  } else {
+    // All goals hit but wrong order
+    const actual = lastGoalOrder.map(i=>i+1).join('→');
+    setMessage(`順番が違う！ ${actual} ではなく 1→2… の順で通過して`);
+  }
+}
+
+function resetStage() {
+  grid = Array.from({length:ROWS},()=>Array(COLS).fill(null));
+  laserOn = false; goalsHit = new Set(); laserSegments = [];
+  lastGoalOrder = []; lastWarpsUsed = 0;
+  clearLaser(); setMessage(''); drawGrid();
+}
+
+function initStage(idx) {
+  currentStage = idx;
+  laserOn = false; goalsHit = new Set(); laserSegments = [];
+  lastGoalOrder = []; lastWarpsUsed = 0;
+  grid = Array.from({length:ROWS},()=>Array(COLS).fill(null));
+  document.getElementById('stage-label').textContent = `STAGE ${idx+1}`;
+  document.getElementById('gimmick-badge').textContent = STAGES[idx].gimmick;
+  document.getElementById('overlay').classList.remove('show');
+  setMessage('');
+  updateDevPanel();
+  resize();
+}
+
+function showClear() {
+  const isLast = currentStage >= STAGES.length-1;
+  document.getElementById('overlay-emoji').textContent = isLast ? '🏆' : '🎉';
+  document.getElementById('overlay-title').textContent = isLast ? 'ALL CLEAR!' : 'CLEAR!';
+  document.getElementById('overlay-sub').textContent = isLast
+    ? '全12ステージ制覇！おめでとう！'
+    : `ステージ ${currentStage+1} クリア！`;
+  document.getElementById('overlay-btn').textContent = isLast ? 'もう一度' : '次のステージ →';
+  document.getElementById('overlay').classList.add('show');
+}
+
+function nextStage() {
+  initStage(currentStage >= STAGES.length-1 ? 0 : currentStage+1);
+}
+
+function setMessage(msg) {
+  document.getElementById('message').textContent = msg;
+}
+
+buildDevPanel();
+initStage(0);
+</script>
+</body>
+</html>
