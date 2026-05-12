@@ -169,7 +169,23 @@
     text-align: center;
     max-width: 300px;
     width: 90%;
+    position: relative;
   }
+  .overlay-close {
+    position: absolute;
+    top: 12px; right: 14px;
+    background: transparent;
+    border: 1px solid #333;
+    color: #666;
+    border-radius: 50%;
+    width: 28px; height: 28px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+    line-height: 1;
+  }
+  .overlay-close:hover { border-color: #888; color: #ccc; }
   .overlay-emoji { font-size: 3.5rem; margin-bottom: 10px; }
   .overlay-title {
     font-family: 'Orbitron', monospace;
@@ -193,7 +209,65 @@
     width: 100%;
   }
 
-  /* ── DEV: Stage select ── */
+  /* ── Star Meter ── */
+  #star-meter {
+    width: 100%;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .star-icons {
+    display: flex;
+    gap: 3px;
+    flex-shrink: 0;
+  }
+
+  .star-icon {
+    font-size: 1.1rem;
+    transition: all 0.2s;
+    filter: grayscale(1) opacity(0.3);
+  }
+
+  .star-icon.lit {
+    filter: none;
+    text-shadow: 0 0 8px rgba(255,200,0,0.8);
+  }
+
+  .meter-bar-wrap {
+    flex: 1;
+    height: 12px;
+    background: #0d0d1a;
+    border: 1px solid #2a2a40;
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .meter-bar {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.2s ease, background 0.3s ease;
+    background: linear-gradient(90deg, #00ffcc, #00b894);
+  }
+
+  /* threshold markers */
+  .meter-marker {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 1px;
+  }
+
+  .meter-label {
+    font-size: 0.62rem;
+    color: #666;
+    white-space: nowrap;
+    flex-shrink: 0;
+    font-family: 'Orbitron', monospace;
+  }
   #dev-panel {
     width: 100%;
     max-width: 420px;
@@ -246,7 +320,19 @@
 </header>
 
 <div class="game-wrap">
-  <div id="gimmick-badge">ミラーのみ ★☆☆</div>
+  <!-- Star Meter -->
+  <div id="star-meter">
+    <div class="star-icons">
+      <span class="star-icon lit" id="star1">⭐</span>
+      <span class="star-icon lit" id="star2">⭐</span>
+      <span class="star-icon lit" id="star3">⭐</span>
+    </div>
+    <div class="meter-bar-wrap" id="meter-wrap">
+      <div class="meter-bar" id="meter-bar"></div>
+      <div class="meter-marker" id="marker-2star"></div>
+      <div class="meter-marker" id="marker-1star"></div>
+    </div>
+  </div>
   <div id="message"></div>
   <div id="grid-container">
     <canvas id="grid-canvas"></canvas>
@@ -255,9 +341,8 @@
   </div>
   <div class="bottom-panel">
     <button class="go-btn" onclick="fireGo()">GO!</button>
-    <button class="reset-btn" onclick="resetStage()">リセット</button>
+    <button class="reset-btn" onclick="resetStage()">RESET</button>
   </div>
-  <div class="hint">マスをタップ → なし ／ ＼ の順に切り替わります</div>
 </div>
 
 <!-- ★ DEV ONLY: 完成時はこのブロックを丸ごと削除 -->
@@ -269,10 +354,12 @@
 
 <div id="overlay">
   <div class="overlay-box">
+    <button class="overlay-close" onclick="closeOverlay()">✕</button>
     <div class="overlay-emoji" id="overlay-emoji">🎉</div>
     <div class="overlay-title" id="overlay-title">CLEAR!</div>
-    <div class="overlay-sub" id="overlay-sub">素晴らしい！</div>
-    <button class="overlay-btn" onclick="nextStage()" id="overlay-btn">次のステージ →</button>
+    <div id="overlay-stars" style="font-size:2rem; margin-bottom:8px; letter-spacing:4px;"></div>
+    <div class="overlay-sub" id="overlay-sub"></div>
+    <button class="overlay-btn" onclick="nextStage()" id="overlay-btn">NEXT →</button>
   </div>
 </div>
 
@@ -280,102 +367,298 @@
 const COLS = 6, ROWS = 6;
 
 const STAGES = [
-  // ── LV1: ミラーのみ（変更なし）
+  // stage1
   {
     gimmick: 'ミラーのみ ★☆☆',
-    start: { col: 0, row: 5, dir: 'right' },
-    goals: [{ col: 5, row: 0 }],
-    walls: [], warps: [],
-  },
-  // ── LV2: 画像通り — Start col0,row4右向き / Goal col2,row1 / 壁 col0-2,row3
-  {
-    gimmick: 'ミラーのみ ★☆☆',
-    start: { col: 0, row: 4, dir: 'right' },
-    goals: [{ col: 2, row: 1 }],
-    walls: [{ col: 0, row: 3 }, { col: 1, row: 3 }, { col: 2, row: 3 }],
-    warps: [],
-  },
-  // ── LV3: ミラーのみ（変更なし）
-  {
-    gimmick: 'ミラーのみ ★☆☆',
-    start: { col: 1, row: 5, dir: 'up' },
-    goals: [{ col: 5, row: 1 }],
-    walls: [{ col: 1, row: 2 }, { col: 4, row: 3 }], warps: [],
-  },
-  // ── LV4: 複数ゴール（変更なし）
-  {
-    gimmick: '複数ゴール ★★☆',
-    start: { col: 0, row: 5, dir: 'right' },
-    goals: [{ col: 3, row: 2 }, { col: 5, row: 0 }],
-    walls: [], warps: [],
-  },
-  // ── LV5: 旧LV6を繰り上げ — Start col0,row5上向き / Goals ②col0,row3 ①col4,row2 ③col5,row5
-  //         壁 col4,row1 / col3,row4
-  {
-    gimmick: '複数ゴール ★★☆',
-    start: { col: 0, row: 5, dir: 'up' },
-    goals: [{ col: 0, row: 2 }, { col: 3, row: 2 }, { col: 5, row: 5 }],
-    walls: [{ col: 4, row: 1 }, { col: 3, row: 4 }], warps: [],
-  },
-  // ── LV6: 画像STAGE6 — Start col0,row5上向き / ①col3,row2 ②col0,row3 ③col5,row5
-  //         壁 col4,row1 / col3,row4（※スケッチ読み直し：ゴール順①②③に合わせて配置）
-  {
-    gimmick: '複数ゴール ★★☆',
-    start: { col: 0, row: 5, dir: 'up' },
-    goals: [{ col: 3, row: 2 }, { col: 0, row: 2 }, { col: 5, row: 5 }],
-    walls: [{ col: 4, row: 1 }, { col: 3, row: 4 }], warps: [],
-  },
-  // ── LV7: 旧LV8
-  {
-    gimmick: 'ワープゾーン ★★☆',
-    start: { col: 2, row: 0, dir: 'down' },
-    goals: [{ col: 5, row: 4 }],
-    walls: [{ col: 2, row: 3 }, { col: 1, row: 4 }],
-    warps: [{ col: 2, row: 2 }, { col: 5, row: 2 }],
-  },
-  // ── LV8: 旧LV7
-  {
-    gimmick: 'ワープゾーン ★★☆',
-    start: { col: 0, row: 1, dir: 'right' },
-    goals: [{ col: 5, row: 1 }],
-    walls: [{ col: 4, row: 2 }],
-    warps: [{ col: 3, row: 2 }, { col: 3, row: 4 }],
-  },
-  // ── LV9: 画像STAGE9 — Start col0,row1右向き / Goal col5,row5
-  //         壁 col3,row2 / col4,row2
-  //         W1: col1,row4 ↔ col3,row1
-  //         W2: col4,row0 ↔ col4,row3
-  {
-    gimmick: 'ワープゾーン ★★★',
-    start: { col: 0, row: 1, dir: 'right' },
-    goals: [{ col: 5, row: 5 }],
-    walls: [{ col: 3, row: 2 }, { col: 4, row: 2 }],
-    warps: [
-      { col: 3, row: 1 }, { col: 1, row: 4 },   // W1ペア
-      { col: 4, row: 0 }, { col: 4, row: 3 },   // W2ペア
-    ],
-  },
-  // ── LV10-12: 複合（変更なし）
-  {
-    gimmick: '複数ゴール＋ワープ ★★★',
-    start: { col: 0, row: 5, dir: 'right' },
-    goals: [{ col: 3, row: 5 }, { col: 5, row: 0 }],
-    walls: [{ col: 2, row: 3 }],
-    warps: [{ col: 3, row: 3 }, { col: 3, row: 0 }],
-  },
-  {
-    gimmick: '複数ゴール＋ワープ ★★★',
-    start: { col: 0, row: 0, dir: 'down' },
-    goals: [{ col: 0, row: 3 }, { col: 4, row: 3 }, { col: 4, row: 0 }],
-    walls: [{ col: 1, row: 1 }, { col: 2, row: 4 }],
-    warps: [{ col: 0, row: 5 }, { col: 4, row: 5 }],
-  },
-  {
-    gimmick: '複数ゴール＋ワープ ★★★',
     start: { col: 0, row: 2, dir: 'right' },
-    goals: [{ col: 0, row: 4 }, { col: 4, row: 1 }, { col: 1, row: 4 }],
+    goals: [{ col: 5, row: 2 }],
+    walls: [], warps: [], forbidden: [],
+    stars: { s3: 1, s2: 2 },
+  },
+  // stage2
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 0, row: 2, dir: 'down' },
+    goals: [{ col: 5, row: 2 }],
+    walls: [], warps: [], forbidden: [],
+    stars: { s3: 2, s2: 3 },
+  },
+  // stage3
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 0, row: 0, dir: 'down' },
+    goals: [{ col: 3, row: 4 }],
+    walls: [{ col: 1, row: 1 }, { col: 2, row: 1 }, { col: 4, row: 1 }, { col: 5, row: 1 }, { col: 1, row: 2 }, { col: 2, row: 2 }, { col: 4, row: 2 }, { col: 5, row: 2 }, { col: 1, row: 3 }, { col: 2, row: 3 }, { col: 4, row: 3 }, { col: 5, row: 3 }],
+    warps: [], forbidden: [],
+    stars: { s3: 1, s2: 2 },
+  },
+  // stage4
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 0, row: 0, dir: 'right' },
+    goals: [{ col: 4, row: 5 }],
+    walls: [{ col: 5, row: 0 }, { col: 0, row: 1 }, { col: 1, row: 1 }, { col: 2, row: 1 }, { col: 3, row: 1 }, { col: 2, row: 3 }, { col: 3, row: 3 }, { col: 4, row: 3 }, { col: 5, row: 3 }, { col: 0, row: 5 }, { col: 3, row: 5 }],
+    warps: [], forbidden: [],
+    stars: { s3: 5, s2: 7 },
+  },
+  // stage5
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 0, row: 0, dir: 'right' },
+    goals: [{ col: 4, row: 5 }],
+    walls: [{ col: 5, row: 0 }, { col: 0, row: 1 }, { col: 1, row: 1 }, { col: 2, row: 1 }, { col: 3, row: 1 }, { col: 2, row: 3 }, { col: 3, row: 3 }, { col: 4, row: 3 }, { col: 5, row: 3 }, { col: 0, row: 5 }, { col: 3, row: 5 }],
+    warps: [], forbidden: [],
+    stars: { s3: 14, s2: 10 },
+    reverse: true,
+  },
+  // stage6
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 5, row: 5, dir: 'up' },
+    goals: [{ col: 5, row: 1 }, { col: 0, row: 0 }],
+    walls: [], warps: [], forbidden: [],
+    stars: { s3: 1, s2: 2 },
+  },
+  // stage7
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 0, row: 0, dir: 'down' },
+    goals: [{ col: 2, row: 2 }, { col: 4, row: 4 }],
+    walls: [{ col: 2, row: 0 }, { col: 4, row: 0 }, { col: 4, row: 2 }, { col: 0, row: 4 }, { col: 2, row: 4 }],
+    warps: [], forbidden: [],
+    stars: { s3: 3, s2: 5 },
+  },
+  // stage8
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 5, row: 0, dir: 'down' },
+    goals: [{ col: 3, row: 4 }, { col: 2, row: 1 }],
+    walls: [{ col: 0, row: 1 }, { col: 2, row: 2 }, { col: 3, row: 2 }, { col: 1, row: 4 }, { col: 5, row: 5 }],
+    warps: [], forbidden: [],
+    stars: { s3: 3, s2: 5 },
+  },
+  // stage9
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 2, row: 0, dir: 'down' },
+    goals: [{ col: 5, row: 1 }, { col: 1, row: 1 }],
+    walls: [{ col: 3, row: 1 }, { col: 3, row: 2 }, { col: 4, row: 2 }, { col: 1, row: 3 }, { col: 2, row: 3 }, { col: 2, row: 4 }],
+    warps: [], forbidden: [],
+    stars: { s3: 8, s2: 10 },
+  },
+  // stage10
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 2, row: 0, dir: 'down' },
+    goals: [{ col: 5, row: 1 }, { col: 1, row: 1 }],
+    walls: [{ col: 3, row: 1 }, { col: 3, row: 2 }, { col: 4, row: 2 }, { col: 1, row: 3 }, { col: 2, row: 3 }, { col: 2, row: 4 }],
+    warps: [], forbidden: [],
+    stars: { s3: 11, s2: 8 }, // reverse: 11枚以上★3, 8枚以上★2
+    reverse: true,
+  },
+  // stage11
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 0, row: 5, dir: 'right' },
+    goals: [{ col: 2, row: 3 }, { col: 4, row: 2 }, { col: 1, row: 0 }],
+    walls: [{ col: 2, row: 1 }, { col: 0, row: 2 }, { col: 5, row: 3 }, { col: 3, row: 4 }],
+    warps: [], forbidden: [],
+    stars: { s3: 4, s2: 6 },
+  },
+  // stage12
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 0, row: 5, dir: 'up' },
+    goals: [{ col: 0, row: 2 }, { col: 3, row: 2 }, { col: 4, row: 5 }],
+    walls: [{ col: 4, row: 1 }, { col: 3, row: 5 }, { col: 3, row: 4 }],
+    warps: [], forbidden: [],
+    stars: { s3: 4, s2: 6 },
+  },
+  // stage13
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 0, row: 5, dir: 'up' },
+    goals: [{ col: 3, row: 2 }, { col: 0, row: 2 }, { col: 4, row: 5 }],
+    walls: [{ col: 4, row: 1 }, { col: 3, row: 4 }, { col: 3, row: 5 }],
+    warps: [], forbidden: [],
+    stars: { s3: 13, s2: 16 },
+  },
+  // stage14
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 0, row: 5, dir: 'right' },
+    goals: [{ col: 4, row: 4 }, { col: 2, row: 2 }, { col: 3, row: 3 }],
+    walls: [{ col: 5, row: 0 }, { col: 3, row: 2 }, { col: 1, row: 4 }],
+    warps: [], forbidden: [],
+    stars: { s3: 3, s2: 5 },
+  },
+  // stage15
+  {
+    gimmick: 'ミラーのみ ★☆☆',
+    start: { col: 0, row: 5, dir: 'right' },
+    goals: [{ col: 4, row: 4 }, { col: 2, row: 2 }, { col: 3, row: 3 }],
+    walls: [{ col: 5, row: 0 }, { col: 3, row: 2 }, { col: 1, row: 4 }],
+    warps: [], forbidden: [],
+    stars: { s3: 10, s2: 7 },
+    reverse: true,
+  },
+  // stage16
+  {
+    gimmick: 'ワープゾーン ★★☆',
+    start: { col: 0, row: 1, dir: 'right' },
+    goals: [{ col: 5, row: 4 }],
     walls: [],
-    warps: [{ col: 2, row: 0 }, { col: 3, row: 4 }, { col: 2, row: 3 }, { col: 4, row: 3 }],
+    warps: [{ col: 2, row: 1 }, { col: 3, row: 4 }],
+    forbidden: [],
+    stars: { s3: 1, s2: 2 },
+  },
+  // stage17
+  {
+    gimmick: 'ワープゾーン ★★☆',
+    start: { col: 5, row: 2, dir: 'down' },
+    goals: [{ col: 4, row: 2 }],
+    walls: [{ col: 1, row: 1 }, { col: 1, row: 2 }, { col: 2, row: 5 }, { col: 3, row: 5 }],
+    warps: [{ col: 2, row: 2 }, { col: 3, row: 4 }],
+    forbidden: [],
+    stars: { s3: 2, s2: 4 },
+  },
+  // stage18
+  {
+    gimmick: 'ワープゾーン ★★☆',
+    start: { col: 0, row: 0, dir: 'down' },
+    goals: [{ col: 3, row: 4 }],
+    walls: [{ col: 3, row: 0 }, { col: 1, row: 1 }, { col: 1, row: 2 }, { col: 5, row: 2 }, { col: 0, row: 4 }, { col: 2, row: 5 }, { col: 3, row: 5 }],
+    warps: [{ col: 4, row: 1 }, { col: 1, row: 3 }],
+    forbidden: [],
+    stars: { s3: 6, s2: 8 },
+  },
+  // stage19
+  {
+    gimmick: 'ワープゾーン ★★☆',
+    start: { col: 2, row: 5, dir: 'left' },
+    goals: [{ col: 2, row: 1 }],
+    walls: [{ col: 2, row: 0 }, { col: 3, row: 1 }, { col: 0, row: 2 }, { col: 3, row: 2 }, { col: 4, row: 3 }],
+    warps: [{ col: 1, row: 2 }, { col: 4, row: 2 }],
+    forbidden: [],
+    stars: { s3: 3, s2: 5 },
+  },
+  // stage20
+  {
+    gimmick: 'ワープゾーン ★★☆',
+    start: { col: 2, row: 5, dir: 'left' },
+    goals: [{ col: 2, row: 1 }],
+    walls: [{ col: 2, row: 0 }, { col: 3, row: 1 }, { col: 0, row: 2 }, { col: 3, row: 2 }, { col: 4, row: 3 }],
+    warps: [{ col: 1, row: 2 }, { col: 4, row: 2 }],
+    forbidden: [],
+    stars: { s3: 15, s2: 10 },
+    reverse: true,
+  },
+
+  // ── stage21
+  {
+    gimmick: 'W×2＋複数ゴール ★★★',
+    start: { col: 0, row: 0, dir: 'right' },
+    goals: [{ col: 4, row: 1 }, { col: 5, row: 4 }],
+    walls: [{ col: 2, row: 2 }, { col: 4, row: 2 }, { col: 1, row: 3 }, { col: 3, row: 3 }],
+    warps: [{ col: 2, row: 1 }, { col: 3, row: 4 }],
+    forbidden: [],
+    stars: { s3: 3, s2: 5 },
+  },
+  // ── stage22
+  {
+    gimmick: 'W×2＋複数ゴール ★★★',
+    start: { col: 5, row: 2, dir: 'down' },
+    goals: [{ col: 1, row: 0 }, { col: 2, row: 2 }, { col: 5, row: 5 }],
+    walls: [{ col: 4, row: 2 }, { col: 2, row: 3 }],
+    warps: [{ col: 1, row: 3 }, { col: 3, row: 3 }],
+    forbidden: [],
+    stars: { s3: 7, s2: 9 },
+  },
+  // ── stage23
+  {
+    gimmick: 'W×2＋複数ゴール ★★★',
+    start: { col: 5, row: 5, dir: 'left' },
+    goals: [{ col: 1, row: 2 }, { col: 3, row: 0 }],
+    walls: [{ col: 2, row: 1 }, { col: 5, row: 1 }, { col: 0, row: 4 }, { col: 3, row: 4 }],
+    warps: [{ col: 2, row: 4 }, { col: 1, row: 5 }, { col: 4, row: 2 }, { col: 3, row: 3 }],
+    forbidden: [],
+    stars: { s3: 3, s2: 5 },
+  },
+  // ── stage24: W1×2 + W2×2 / ゴール2個 長距離 ★★★
+  {
+    gimmick: 'W×2＋複数ゴール ★★★',
+    start: { col: 5, row: 0, dir: 'down' },
+    goals: [{ col: 0, row: 3 }, { col: 5, row: 5 }],
+    walls: [{ col: 3, row: 1 }, { col: 1, row: 4 }, { col: 4, row: 4 }],
+    warps: [
+      { col: 5, row: 2 }, { col: 2, row: 2 },  // W1
+      { col: 2, row: 4 }, { col: 5, row: 4 },  // W2
+    ],
+    forbidden: [],
+    stars: { s3: 3, s2: 5 },
+  },
+  // ── stage25
+  {
+    gimmick: 'W×2＋複数ゴール ★★★',
+    start: { col: 5, row: 0, dir: 'down' },
+    goals: [{ col: 0, row: 3 }, { col: 5, row: 5 }],
+    walls: [{ col: 3, row: 1 }, { col: 1, row: 4 }, { col: 4, row: 4 }],
+    warps: [{ col: 5, row: 2 }, { col: 2, row: 2 }, { col: 2, row: 4 }, { col: 5, row: 4 }],
+    forbidden: [],
+    stars: { s3: 12, s2: 8 },
+    reverse: true,
+  },
+  // ── stage26
+  {
+    gimmick: 'W×2＋複数ゴール ★★★',
+    start: { col: 5, row: 2, dir: 'left' },
+    goals: [{ col: 4, row: 5 }, { col: 1, row: 0 }, { col: 1, row: 2 }],
+    walls: [{ col: 1, row: 1 }, { col: 3, row: 3 }],
+    warps: [{ col: 2, row: 2 }, { col: 5, row: 5 }, { col: 4, row: 1 }, { col: 4, row: 4 }],
+    forbidden: [],
+    stars: { s3: 4, s2: 6 },
+  },
+  // ── stage27
+  {
+    gimmick: 'W×2＋複数ゴール ★★★',
+    start: { col: 2, row: 5, dir: 'right' },
+    goals: [{ col: 5, row: 3 }, { col: 2, row: 2 }, { col: 2, row: 0 }],
+    walls: [{ col: 5, row: 0 }, { col: 3, row: 1 }, { col: 1, row: 3 }, { col: 3, row: 4 }, { col: 0, row: 5 }],
+    warps: [{ col: 1, row: 1 }, { col: 4, row: 4 }, { col: 0, row: 0 }, { col: 3, row: 3 }],
+    forbidden: [],
+    stars: { s3: 4, s2: 6 },
+  },
+  // ── stage28
+  {
+    gimmick: 'W×2＋複数ゴール ★★★',
+    start: { col: 5, row: 0, dir: 'left' },
+    goals: [{ col: 4, row: 1 }, { col: 1, row: 4 }, { col: 3, row: 3 }],
+    walls: [{ col: 2, row: 0 }, { col: 3, row: 2 }, { col: 5, row: 2 }, { col: 0, row: 3 }, { col: 2, row: 3 }, { col: 3, row: 5 }],
+    warps: [{ col: 3, row: 0 }, { col: 2, row: 5 }, { col: 0, row: 2 }, { col: 5, row: 3 }],
+    forbidden: [],
+    stars: { s3: 2, s2: 4 },
+  },
+  // ── stage29
+  {
+    gimmick: 'W×2＋複数ゴール ★★★',
+    start: { col: 5, row: 5, dir: 'up' },
+    goals: [{ col: 5, row: 2 }, { col: 0, row: 2 }, { col: 0, row: 5 }],
+    walls: [{ col: 4, row: 4 }, { col: 1, row: 3 }, { col: 3, row: 1 }, { col: 2, row: 5 }],
+    warps: [
+      { col: 5, row: 3 }, { col: 3, row: 3 },
+      { col: 3, row: 5 }, { col: 3, row: 2 },
+    ],
+    forbidden: [],
+    stars: { s3: 4, s2: 6 },
+  },
+  // ── stage30
+  {
+    gimmick: 'W×2＋複数ゴール ★★★',
+    start: { col: 0, row: 2, dir: 'right' },
+    goals: [{ col: 5, row: 2 }],
+    walls: [], warps: [], forbidden: [],
+    stars: { s3: 28, s2: 20 },
+    reverse: true,
   },
 ];
 
@@ -451,7 +734,41 @@ function playTone({ freq = 440, type = 'sine', gain = 0.3, duration = 0.1, attac
   } catch(e) {}
 }
 
-// ミラー設置：コツッ
+// ミラー反射：カキーン
+function soundReflect() {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(1800, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(900, ctx.currentTime + 0.12);
+    gainNode.gain.setValueAtTime(0.35, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.2);
+  } catch(e) {}
+}
+
+// ワープ通過：シュン…
+function soundWarp() {
+  try {
+    const ctx = getAudioCtx();
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    osc.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(600, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.4);
+    gainNode.gain.setValueAtTime(0.28, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.45);
+  } catch(e) {}
+}
 function soundMirrorPlace() {
   playTone({ freq: 600, type: 'triangle', gain: 0.25, duration: 0.08 });
 }
@@ -505,6 +822,64 @@ function soundClear() {
   } catch(e) {}
 }
 
+// ── Star Meter ────────────────────────────────────────────────
+function countMirrors() {
+  let n = 0;
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (grid[r][c]) n++;
+  return n;
+}
+
+function updateMeter() {
+  const stage = STAGES[currentStage];
+  const { s3, s2 } = stage.stars;
+  const reverse = !!stage.reverse;
+  // reverseは「GO!後の実反射数」、通常は「置いたミラー総数」
+  const count = reverse ? lastHitMirrors : countMirrors();
+
+  const bar = document.getElementById('meter-bar');
+  const m2 = document.getElementById('marker-2star');
+  const m1 = document.getElementById('marker-1star');
+
+  if (reverse) {
+    const maxDisplay = s3;
+    const pct = Math.min(1, count / maxDisplay);
+    bar.style.width = (pct * 100) + '%';
+    if (count >= s3)      bar.style.background = 'linear-gradient(90deg,#00ffcc,#00b894)';
+    else if (count >= s2) bar.style.background = 'linear-gradient(90deg,#ffdd00,#ff9900)';
+    else                  bar.style.background = 'linear-gradient(90deg,#ff6644,#ff2244)';
+    m2.style.left = ((s2 / maxDisplay) * 100) + '%';
+    m1.style.display = 'none';
+  } else {
+    const maxDisplay = s2 + s2;
+    const pct = Math.max(0, 1 - count / maxDisplay);
+    bar.style.width = (pct * 100) + '%';
+    if (count <= s3)      bar.style.background = 'linear-gradient(90deg,#00ffcc,#00b894)';
+    else if (count <= s2) bar.style.background = 'linear-gradient(90deg,#ffdd00,#ff9900)';
+    else                  bar.style.background = 'linear-gradient(90deg,#ff6644,#ff2244)';
+    m2.style.left = (100 - (s3 / maxDisplay) * 100) + '%';
+    m1.style.left = (100 - (s2 / maxDisplay) * 100) + '%';
+    m1.style.display = '';
+  }
+
+  const stars = getStarRating(count, s3, s2, reverse);
+  ['star1','star2','star3'].forEach((id, i) => {
+    document.getElementById(id).classList.toggle('lit', i < stars);
+  });
+}
+
+function getStarRating(count, s3, s2, reverse) {
+  if (reverse) {
+    if (count >= s3) return 3;
+    if (count >= s2) return 2;
+    return 1;
+  }
+  if (count <= s3) return 3;
+  if (count <= s2) return 2;
+  return 1;
+}
+
 // ── Resize ───────────────────────────────────────────────────
 function resize() {
   const size = document.getElementById('grid-container').offsetWidth;
@@ -548,6 +923,7 @@ function tap(x, y) {
   clearLaser();
   setMessage('');
   drawGrid();
+  updateMeter();
 }
 
 // ── Draw ─────────────────────────────────────────────────────
@@ -668,17 +1044,28 @@ function drawMirror(col, row, type) {
   gctx.restore();
 }
 
+function getArrowBase(col, row, dir) {
+  // 矢印の付け根座標を返す（レーザー開始点として使用）
+  const cs = CELL_SIZE;
+  const cx = col*cs+cs/2, cy = row*cs+cs/2;
+  let dx = 0, dy = 0;
+  if (dir==='right') dx=1; else if (dir==='left') dx=-1;
+  else if (dir==='up') dy=-1; else dy=1;
+  return { x: cx + dx*(cs*0.22), y: cy + dy*(cs*0.22) };
+}
+
 function drawStart(col, row, dir) {
   const cs = CELL_SIZE;
   const cx = col*cs+cs/2, cy = row*cs+cs/2;
   const color = '#00ffcc';
 
+  // 中心の光る丸
   gctx.save();
   gctx.fillStyle = color;
   gctx.shadowColor = color;
   gctx.shadowBlur = 22;
   gctx.beginPath();
-  gctx.arc(cx, cy, cs*0.22, 0, Math.PI*2);
+  gctx.arc(cx, cy, cs*0.18, 0, Math.PI*2);
   gctx.fill();
   gctx.restore();
 
@@ -686,22 +1073,38 @@ function drawStart(col, row, dir) {
   if (dir==='right') dx=1; else if (dir==='left') dx=-1;
   else if (dir==='up') dy=-1; else dy=1;
 
-  const ax1 = cx + dx*(cs*0.25), ay1 = cy + dy*(cs*0.25);
-  const ax2 = cx + dx*(cs*0.57), ay2 = cy + dy*(cs*0.57);
-  const headSize = cs * 0.13;
+  // 矢印：付け根（丸の端）→ 先端（セル端に近い位置）
+  const base  = { x: cx + dx*(cs*0.22), y: cy + dy*(cs*0.22) };
+  const tip   = { x: cx + dx*(cs*0.44), y: cy + dy*(cs*0.44) };
+  const shaft = { x: cx + dx*(cs*0.30), y: cy + dy*(cs*0.30) };
+  const headSize = cs * 0.20; // 矢印ヘッドを大きく
+  const angle = Math.atan2(dy, dx);
 
   gctx.save();
   gctx.strokeStyle = color; gctx.fillStyle = color;
-  gctx.lineWidth = Math.max(2, cs*0.055);
+  gctx.lineWidth = Math.max(3, cs*0.08);
   gctx.shadowColor = color; gctx.shadowBlur = 14;
   gctx.lineCap = 'round';
-  gctx.beginPath(); gctx.moveTo(ax1, ay1); gctx.lineTo(ax2, ay2); gctx.stroke();
-  const angle = Math.atan2(dy, dx);
+
+  // シャフト
   gctx.beginPath();
-  gctx.moveTo(ax2, ay2);
-  gctx.lineTo(ax2 - headSize*Math.cos(angle-Math.PI/6), ay2 - headSize*Math.sin(angle-Math.PI/6));
-  gctx.lineTo(ax2 - headSize*Math.cos(angle+Math.PI/6), ay2 - headSize*Math.sin(angle+Math.PI/6));
-  gctx.closePath(); gctx.fill();
+  gctx.moveTo(base.x, base.y);
+  gctx.lineTo(shaft.x, shaft.y);
+  gctx.stroke();
+
+  // 大きめの三角ヘッド
+  gctx.beginPath();
+  gctx.moveTo(tip.x, tip.y);
+  gctx.lineTo(
+    tip.x - headSize*Math.cos(angle - Math.PI/5),
+    tip.y - headSize*Math.sin(angle - Math.PI/5)
+  );
+  gctx.lineTo(
+    tip.x - headSize*Math.cos(angle + Math.PI/5),
+    tip.y - headSize*Math.sin(angle + Math.PI/5)
+  );
+  gctx.closePath();
+  gctx.fill();
   gctx.restore();
 }
 
@@ -733,21 +1136,25 @@ function drawGoal(col, row, idx) {
 }
 
 // ── Laser ─────────────────────────────────────────────────────
-// Returns:
-//   segments   : array of point-arrays for drawing
-//   goalOrder  : array of goal indices in the order they were hit
-//   warpsUsedCount : number of distinct warp portals entered
+// traceLaser now also returns an events array for animation:
+//   events: [{ type: 'mirror'|'warp'|'goal', pointIndex, goalIdx? }]
+//   points: flat array of all {x,y} points across all segments (with segment breaks)
 function traceLaser() {
   const stage = STAGES[currentStage];
   const cs = CELL_SIZE;
   const segments = [];
-  const goalOrder = [];          // ordered list of goal indices as hit
-  let warpsUsedCount = 0;        // how many warp entries occurred
+  const goalOrder = [];
+  let warpsUsedCount = 0;
+  const hitMirrors = new Set();
+
+  // For animation: flat list of points + events keyed to point index
+  const animPoints = [];   // {x, y, segIdx}
+  const animEvents = [];   // {type, pointIndex, goalIdx?}
 
   const queue = [{
     col: stage.start.col, row: stage.start.row, dir: stage.start.dir,
-    path: [{ x: stage.start.col*cs+cs/2, y: stage.start.row*cs+cs/2 }],
-    warpsUsed: new Set(),
+    path: [getArrowBase(stage.start.col, stage.start.row, stage.start.dir)],
+    warpsUsed: '', // 直前に通ったワープ出口座標（なければ空文字）
   }];
 
   while (queue.length > 0) {
@@ -759,7 +1166,6 @@ function traceLaser() {
       if (dir==='right') nc++; else if (dir==='left') nc--;
       else if (dir==='up') nr--; else nr++;
 
-      // Out of bounds
       if (nc<0||nc>=COLS||nr<0||nr>=ROWS) {
         let ex=path[path.length-1].x, ey=path[path.length-1].y;
         if (dir==='right') ex=(col+1)*cs; else if (dir==='left') ex=col*cs;
@@ -767,7 +1173,6 @@ function traceLaser() {
         path.push({x:ex,y:ey}); break;
       }
 
-      // Wall
       if (stage.walls.some(w=>w.col===nc&&w.row===nr)) {
         let ex=nc*cs+cs/2, ey=nr*cs+cs/2;
         if (dir==='right') ex=nc*cs; else if (dir==='left') ex=(nc+1)*cs;
@@ -776,27 +1181,34 @@ function traceLaser() {
       }
 
       col=nc; row=nr;
+      const cx2=col*cs+cs/2, cy2=row*cs+cs/2;
 
-      // Check goal — record in order, skip duplicates
+      // Goal — 最後のゴール番号（goals配列の末尾）に到達したときだけ打ち切る
+      let hitLastGoal = false;
       stage.goals.forEach((g, gi) => {
         if (g.col===col && g.row===row && !goalOrder.includes(gi)) {
           goalOrder.push(gi);
+          path.push({x:cx2, y:cy2});
+          animEvents.push({ type: 'goal', pointIndex: animPoints.length + path.length - 1, goalIdx: gi });
+          if (gi === stage.goals.length - 1) hitLastGoal = true;
         }
       });
+      if (hitLastGoal) break;
 
-      // Warp
+      // Warp — 直前に通ったワープと同じ場合のみブロック（無限ループ防止）
+      // それ以外は何度でも通過可能
       const warpKey = `${col},${row}`;
       const partner = getWarpPartner(stage, col, row);
-      if (partner && !warpsUsed.has(warpKey)) {
-        path.push({x:col*cs+cs/2, y:row*cs+cs/2});
+      if (partner && warpsUsed !== warpKey) {
+        path.push({x:cx2, y:cy2});
+        animEvents.push({ type: 'warp', pointIndex: animPoints.length + path.length - 1 });
         segments.push([...path]);
+        path.forEach(p => animPoints.push(p));
         warpsUsedCount++;
-        const nw = new Set(warpsUsed);
-        nw.add(warpKey); nw.add(`${partner.col},${partner.row}`);
         queue.push({
           col: partner.col, row: partner.row, dir,
           path: [{x:partner.col*cs+cs/2, y:partner.row*cs+cs/2}],
-          warpsUsed: nw,
+          warpsUsed: `${partner.col},${partner.row}`, // 直前のワープ出口を記録
         });
         path = null; break;
       }
@@ -804,7 +1216,9 @@ function traceLaser() {
       // Mirror
       const m = grid[row][col];
       if (m) {
-        path.push({x:col*cs+cs/2, y:row*cs+cs/2});
+        path.push({x:cx2, y:cy2});
+        animEvents.push({ type: 'mirror', pointIndex: animPoints.length + path.length - 1 });
+        hitMirrors.add(`${col},${row}`); // 実際に反射したミラーを記録
         if (m==='/') {
           if (dir==='right') dir='up'; else if (dir==='left') dir='down';
           else if (dir==='up') dir='right'; else dir='left';
@@ -814,10 +1228,138 @@ function traceLaser() {
         }
       }
     }
-    if (path && path.length > 0) segments.push(path);
+    if (path && path.length > 0) {
+      segments.push(path);
+      path.forEach(p => animPoints.push(p));
+    }
   }
 
-  return { segments, goalOrder, warpsUsedCount };
+  return { segments, goalOrder, warpsUsedCount, animPoints, animEvents, hitMirrorCount: hitMirrors.size };
+}
+
+// ── Laser Animation ───────────────────────────────────────────
+const MS_PER_CELL = 60; // 1点間60ms（実質1マス約60ms）
+let animRAF = null;
+
+function cancelAnim() {
+  if (animRAF) { cancelAnimationFrame(animRAF); animRAF = null; }
+}
+
+function animateLaser(animPoints, animEvents, onComplete) {
+  if (animPoints.length < 2) { onComplete(); return; }
+
+  // 各区間の距離を計算してタイムラインを作る
+  const cs = CELL_SIZE;
+  const timeline = [0]; // timeline[i] = point i に到達する時間(ms)
+  for (let i = 1; i < animPoints.length; i++) {
+    // 固定時間/点ベース（距離ベースだと短区間が多く遅くなるため）
+    timeline.push(timeline[i-1] + MS_PER_CELL);
+  }
+  const totalTime = timeline[timeline.length - 1];
+
+  // どのイベントを発火済みか
+  const firedEvents = new Set();
+
+  const startTime = performance.now();
+
+  function frame(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed, totalTime);
+
+    // 現在位置を求める
+    let curX = animPoints[0].x, curY = animPoints[0].y;
+    let drawnUpTo = 0; // 何番目の点まで描画したか
+
+    for (let i = 1; i < animPoints.length; i++) {
+      if (timeline[i] <= t) {
+        drawnUpTo = i;
+      } else {
+        // i-1 → i の途中
+        const segT = (t - timeline[i-1]) / (timeline[i] - timeline[i-1]);
+        curX = animPoints[i-1].x + (animPoints[i].x - animPoints[i-1].x) * segT;
+        curY = animPoints[i-1].y + (animPoints[i].y - animPoints[i-1].y) * segT;
+        drawnUpTo = i - 1;
+        break;
+      }
+    }
+
+    // イベント発火チェック
+    animEvents.forEach((ev, ei) => {
+      if (!firedEvents.has(ei) && drawnUpTo >= ev.pointIndex) {
+        firedEvents.add(ei);
+        if (ev.type === 'mirror') {
+          soundReflect();
+          // reverseステージ：ミラーに当たるたびにメーターをリアルタイム更新
+          if (STAGES[currentStage].reverse) {
+            lastHitMirrors = [...firedEvents].filter(i => animEvents[i]?.type === 'mirror').length;
+            updateMeter();
+          }
+        }
+        if (ev.type === 'warp')   soundWarp();
+        if (ev.type === 'goal')   soundGoalHit();
+      }
+    });
+
+    // ワープ区間のインデックス範囲を収集（入口の次の点=出口点のみ非表示）
+    // warpイベントのpointIndex = 入口点。入口点+1 = 出口点（この1点間だけ非表示）
+    const warpGaps = new Set();
+    animEvents.forEach(ev => {
+      if (ev.type === 'warp') {
+        // 入口→出口の線分を非表示にするため、入口点のインデックスを記録
+        warpGaps.add(ev.pointIndex);
+      }
+    });
+
+    // ゴール到達点で止まる（最後の番号のゴールのみ）
+    const lastNumberedGoalEvent = animEvents.find(ev => ev.type === 'goal' && ev.goalIdx === STAGES[currentStage].goals.length - 1);
+    const lastGoalPointIdx = lastNumberedGoalEvent
+      ? lastNumberedGoalEvent.pointIndex
+      : animPoints.length - 1;
+
+    const drawLimit = Math.min(drawnUpTo, lastGoalPointIdx);
+    const drawCurX = drawnUpTo >= lastGoalPointIdx ? animPoints[lastGoalPointIdx].x : curX;
+    const drawCurY = drawnUpTo >= lastGoalPointIdx ? animPoints[lastGoalPointIdx].y : curY;
+
+    // 描画：ワープギャップ（入口→出口の線分）だけ切って、それ以外は繋いで描く
+    lctx.clearRect(0,0,laserCanvas.width,laserCanvas.height);
+    const color = '#ff6644';
+
+    lctx.save();
+    lctx.strokeStyle = color; lctx.lineWidth = 3;
+    lctx.shadowColor = color; lctx.shadowBlur = 18;
+    lctx.lineCap = 'round'; lctx.lineJoin = 'round';
+    lctx.setLineDash([]);
+
+    let penDown = false;
+    for (let i = 0; i <= drawLimit; i++) {
+      if (!penDown) {
+        lctx.beginPath();
+        lctx.moveTo(animPoints[i].x, animPoints[i].y);
+        penDown = true;
+      } else if (warpGaps.has(i - 1)) {
+        // 前の点がワープ入口 → ここで線を切って出口から新しいパスを開始
+        lctx.stroke();
+        lctx.beginPath();
+        lctx.moveTo(animPoints[i].x, animPoints[i].y);
+      } else {
+        lctx.lineTo(animPoints[i].x, animPoints[i].y);
+      }
+    }
+    // 先端（現在進行中）
+    if (drawnUpTo < lastGoalPointIdx && !warpGaps.has(drawLimit)) {
+      lctx.lineTo(drawCurX, drawCurY);
+    }
+    lctx.stroke();
+    lctx.restore();
+
+    if (t < totalTime) {
+      animRAF = requestAnimationFrame(frame);
+    } else {
+      onComplete();
+    }
+  }
+
+  animRAF = requestAnimationFrame(frame);
 }
 
 function drawLaser() {
@@ -832,6 +1374,7 @@ function drawLaser() {
     lctx.strokeStyle = color; lctx.lineWidth = 3;
     lctx.shadowColor = color; lctx.shadowBlur = 18;
     lctx.lineCap = 'round'; lctx.lineJoin = 'round';
+    lctx.setLineDash([]);
     lctx.beginPath();
     lctx.moveTo(path[0].x, path[0].y);
     for (let i=1; i<path.length; i++) lctx.lineTo(path[i].x, path[i].y);
@@ -847,92 +1390,97 @@ function clearLaser() {
 // Check all clear conditions
 function isClear() {
   const stage = STAGES[currentStage];
-
-  // 1) All goals hit in order 0,1,2,...
   const expectedOrder = stage.goals.map((_,i)=>i);
   if (JSON.stringify(lastGoalOrder) !== JSON.stringify(expectedOrder)) return false;
-
-  // 2) If stage has warps, laser must have used at least one warp pair
   const requiredWarps = stage.warps.length / 2;
   if (requiredWarps > 0 && lastWarpsUsed < requiredWarps) return false;
-
   return true;
 }
 
 // ── Actions ───────────────────────────────────────────────────
 let lastGoalOrder = [];
 let lastWarpsUsed = 0;
+let lastHitMirrors = 0;
 
 function fireGo() {
+  cancelAnim();
   laserOn = true;
   soundLaser();
+
   const res = traceLaser();
   laserSegments = res.segments;
   lastGoalOrder = res.goalOrder;
   lastWarpsUsed = res.warpsUsedCount;
-
+  lastHitMirrors = res.hitMirrorCount;
   goalsHit = new Set(lastGoalOrder);
 
-  // ゴール通過音
-  lastGoalOrder.forEach((_, i) => {
-    setTimeout(() => soundGoalHit(), 180 + i * 130);
+  // アニメーション開始
+  animateLaser(res.animPoints, res.animEvents, () => {
+    // アニメ完了後に最終状態を描画
+    drawLaser();
+    drawGrid();
+
+    if (isClear()) {
+      setTimeout(soundClear, 100);
+      setTimeout(showClear, 500);
+      return;
+    }
+
+    const stage = STAGES[currentStage];
+    const totalGoals = stage.goals.length;
+    const requiredWarps = stage.warps.length / 2;
+
+    if (requiredWarps > 0 && lastWarpsUsed < requiredWarps) {
+      setMessage('ワープゾーンを必ず通過させよう！');
+    } else if (lastGoalOrder.length === 0) {
+      setMessage('もう少し！ミラーを調整してみて');
+    } else if (lastGoalOrder.length < totalGoals) {
+      setMessage(`あと${totalGoals - lastGoalOrder.length}つのゴールに当てよう！`);
+    } else {
+      const actual = lastGoalOrder.map(i=>i+1).join('→');
+      setMessage(`順番が違う！ ${actual} ではなく 1→2… の順で通過して`);
+    }
   });
-
-  drawLaser();
-  drawGrid();
-
-  if (isClear()) {
-    setTimeout(soundClear, 200);
-    setTimeout(showClear, 600);
-    return;
-  }
-
-  // Build helpful error message
-  const stage = STAGES[currentStage];
-  const totalGoals = stage.goals.length;
-  const requiredWarps = stage.warps.length / 2;
-
-  if (requiredWarps > 0 && lastWarpsUsed < requiredWarps) {
-    setMessage('ワープゾーンを必ず通過させよう！');
-  } else if (lastGoalOrder.length === 0) {
-    setMessage('もう少し！ミラーを調整してみて');
-  } else if (lastGoalOrder.length < totalGoals) {
-    setMessage(`あと${totalGoals - lastGoalOrder.length}つのゴールに当てよう！`);
-  } else {
-    // All goals hit but wrong order
-    const actual = lastGoalOrder.map(i=>i+1).join('→');
-    setMessage(`順番が違う！ ${actual} ではなく 1→2… の順で通過して`);
-  }
 }
 
 function resetStage() {
+  cancelAnim();
   grid = Array.from({length:ROWS},()=>Array(COLS).fill(null));
   laserOn = false; goalsHit = new Set(); laserSegments = [];
-  lastGoalOrder = []; lastWarpsUsed = 0;
+  lastGoalOrder = []; lastWarpsUsed = 0; lastHitMirrors = 0;
   clearLaser(); setMessage(''); drawGrid();
+  updateMeter();
 }
 
 function initStage(idx) {
   currentStage = idx;
   laserOn = false; goalsHit = new Set(); laserSegments = [];
-  lastGoalOrder = []; lastWarpsUsed = 0;
+  lastGoalOrder = []; lastWarpsUsed = 0; lastHitMirrors = 0;
   grid = Array.from({length:ROWS},()=>Array(COLS).fill(null));
   document.getElementById('stage-label').textContent = `STAGE ${idx+1}`;
-  document.getElementById('gimmick-badge').textContent = STAGES[idx].gimmick;
   document.getElementById('overlay').classList.remove('show');
   setMessage('');
   updateDevPanel();
   resize();
+  updateMeter();
+}
+
+function closeOverlay() {
+  document.getElementById('overlay').classList.remove('show');
 }
 
 function showClear() {
   const isLast = currentStage >= STAGES.length-1;
+  const stage = STAGES[currentStage];
+  const count = stage.reverse ? lastHitMirrors : countMirrors();
+  const starCount = getStarRating(count, stage.stars.s3, stage.stars.s2, !!stage.reverse);
+  const starStr = '⭐'.repeat(starCount) + '☆'.repeat(3 - starCount);
+
   document.getElementById('overlay-emoji').textContent = isLast ? '🏆' : '🎉';
   document.getElementById('overlay-title').textContent = isLast ? 'ALL CLEAR!' : 'CLEAR!';
-  document.getElementById('overlay-sub').textContent = isLast
-    ? '全12ステージ制覇！おめでとう！'
-    : `ステージ ${currentStage+1} クリア！`;
-  document.getElementById('overlay-btn').textContent = isLast ? 'もう一度' : '次のステージ →';
+  document.getElementById('overlay-stars').textContent = starStr;
+  document.getElementById('overlay-sub').textContent = '';
+  document.getElementById('overlay-btn').textContent = isLast ? 'RESTART' : 'NEXT →';
   document.getElementById('overlay').classList.add('show');
 }
 
@@ -943,6 +1491,11 @@ function nextStage() {
 function setMessage(msg) {
   document.getElementById('message').textContent = msg;
 }
+
+// オーバーレイ背景タップで再表示
+document.getElementById('overlay').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.add('show');
+});
 
 buildDevPanel();
 initStage(0);
