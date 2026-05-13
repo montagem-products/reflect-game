@@ -316,6 +316,7 @@
 
 <header>
   <div class="title">⚡ REFLECT</div>
+  <div id="total-stars" style="font-family:'Orbitron',monospace; font-size:0.75rem; color:#f0c040; text-shadow:0 0 8px rgba(240,192,64,0.6); letter-spacing:0.05em;">⭐ 0 / 90</div>
   <div class="stage-label" id="stage-label">STAGE 1</div>
 </header>
 
@@ -444,7 +445,7 @@ const STAGES = [
     goals: [{ col: 5, row: 1 }, { col: 1, row: 1 }],
     walls: [{ col: 3, row: 1 }, { col: 3, row: 2 }, { col: 4, row: 2 }, { col: 1, row: 3 }, { col: 2, row: 3 }, { col: 2, row: 4 }],
     warps: [], forbidden: [],
-    stars: { s3: 8, s2: 10 },
+    stars: { s3: 6, s2: 8 },
   },
   // stage10
   {
@@ -453,7 +454,7 @@ const STAGES = [
     goals: [{ col: 5, row: 1 }, { col: 1, row: 1 }],
     walls: [{ col: 3, row: 1 }, { col: 3, row: 2 }, { col: 4, row: 2 }, { col: 1, row: 3 }, { col: 2, row: 3 }, { col: 2, row: 4 }],
     warps: [], forbidden: [],
-    stars: { s3: 11, s2: 8 }, // reverse: 11枚以上★3, 8枚以上★2
+    stars: { s3: 11, s2: 8 },
     reverse: true,
   },
   // stage11
@@ -481,7 +482,7 @@ const STAGES = [
     goals: [{ col: 3, row: 2 }, { col: 0, row: 2 }, { col: 4, row: 5 }],
     walls: [{ col: 4, row: 1 }, { col: 3, row: 4 }, { col: 3, row: 5 }],
     warps: [], forbidden: [],
-    stars: { s3: 13, s2: 16 },
+    stars: { s3: 8, s2: 11 },
   },
   // stage14
   {
@@ -490,7 +491,7 @@ const STAGES = [
     goals: [{ col: 4, row: 4 }, { col: 2, row: 2 }, { col: 3, row: 3 }],
     walls: [{ col: 5, row: 0 }, { col: 3, row: 2 }, { col: 1, row: 4 }],
     warps: [], forbidden: [],
-    stars: { s3: 3, s2: 5 },
+    stars: { s3: 4, s2: 6 },
   },
   // stage15
   {
@@ -499,7 +500,7 @@ const STAGES = [
     goals: [{ col: 4, row: 4 }, { col: 2, row: 2 }, { col: 3, row: 3 }],
     walls: [{ col: 5, row: 0 }, { col: 3, row: 2 }, { col: 1, row: 4 }],
     warps: [], forbidden: [],
-    stars: { s3: 10, s2: 7 },
+    stars: { s3: 18, s2: 13 },
     reverse: true,
   },
   // stage16
@@ -520,7 +521,7 @@ const STAGES = [
     walls: [{ col: 1, row: 1 }, { col: 1, row: 2 }, { col: 2, row: 5 }, { col: 3, row: 5 }],
     warps: [{ col: 2, row: 2 }, { col: 3, row: 4 }],
     forbidden: [],
-    stars: { s3: 2, s2: 4 },
+    stars: { s3: 3, s2: 5 },
   },
   // stage18
   {
@@ -530,7 +531,7 @@ const STAGES = [
     walls: [{ col: 3, row: 0 }, { col: 1, row: 1 }, { col: 1, row: 2 }, { col: 5, row: 2 }, { col: 0, row: 4 }, { col: 2, row: 5 }, { col: 3, row: 5 }],
     warps: [{ col: 4, row: 1 }, { col: 1, row: 3 }],
     forbidden: [],
-    stars: { s3: 6, s2: 8 },
+    stars: { s3: 5, s2: 7 },
   },
   // stage19
   {
@@ -540,7 +541,7 @@ const STAGES = [
     walls: [{ col: 2, row: 0 }, { col: 3, row: 1 }, { col: 0, row: 2 }, { col: 3, row: 2 }, { col: 4, row: 3 }],
     warps: [{ col: 1, row: 2 }, { col: 4, row: 2 }],
     forbidden: [],
-    stars: { s3: 3, s2: 5 },
+    stars: { s3: 5, s2: 7 },
   },
   // stage20
   {
@@ -567,7 +568,7 @@ const STAGES = [
   // ── stage22
   {
     gimmick: 'W×2＋複数ゴール ★★★',
-    start: { col: 5, row: 2, dir: 'down' },
+    start: { col: 5, row: 0, dir: 'down' },
     goals: [{ col: 1, row: 0 }, { col: 2, row: 2 }, { col: 5, row: 5 }],
     walls: [{ col: 4, row: 2 }, { col: 2, row: 3 }],
     warps: [{ col: 1, row: 3 }, { col: 3, row: 3 }],
@@ -675,6 +676,14 @@ function getWarpPartner(stage, col, row) {
 let currentStage = 0;
 let grid = [];
 let laserOn = false;
+// 星スコア（localStorageから読み込み）
+let stageStars = (() => {
+  try {
+    const saved = localStorage.getItem('reflectStageStars');
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return Array(30).fill(0);
+})();
 let laserSegments = [];
 let goalsHit = new Set();
 let CELL_SIZE;
@@ -1465,6 +1474,11 @@ function initStage(idx) {
   updateMeter();
 }
 
+function updateTotalStars() {
+  const total = stageStars.reduce((a, b) => a + b, 0);
+  document.getElementById('total-stars').textContent = `⭐ ${total} / 90`;
+}
+
 function closeOverlay() {
   document.getElementById('overlay').classList.remove('show');
 }
@@ -1475,6 +1489,13 @@ function showClear() {
   const count = stage.reverse ? lastHitMirrors : countMirrors();
   const starCount = getStarRating(count, stage.stars.s3, stage.stars.s2, !!stage.reverse);
   const starStr = '⭐'.repeat(starCount) + '☆'.repeat(3 - starCount);
+
+  // ベストスコアを更新して保存
+  if (starCount > stageStars[currentStage]) {
+    stageStars[currentStage] = starCount;
+    try { localStorage.setItem('reflectStageStars', JSON.stringify(stageStars)); } catch(e) {}
+  }
+  updateTotalStars();
 
   document.getElementById('overlay-emoji').textContent = isLast ? '🏆' : '🎉';
   document.getElementById('overlay-title').textContent = isLast ? 'ALL CLEAR!' : 'CLEAR!';
